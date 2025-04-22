@@ -16,10 +16,9 @@ public function saveDocuments() {
         $savePath = FCPATH . $doc['DocPathName'];
         $dir = dirname($savePath);
 
-        // Ensure directory exists
+        // Create directory if it doesn't exist
         if (!is_dir($dir)) {
             if (!mkdir($dir, 0777, true)) {
-                log_message('error', "Failed to create directory: $dir");
                 $results[] = [
                     'DocName' => $doc['DocName'],
                     'status' => 'error',
@@ -29,40 +28,53 @@ public function saveDocuments() {
             }
         }
 
-        // Use cURL for downloading
+        // Set headers to simulate browser request
+        $headers = [
+            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+            'Accept: */*',
+            'Referer: ' . $url,
+            'Origin: http://yourdomain.com' // Optional - replace with your actual frontend
+        ];
+
+        // Initialize cURL
         $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-        $fileContent = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_HEADER => true,
+            CURLOPT_HTTPHEADER => $headers
+        ]);
+
+        $response = curl_exec($ch);
         $curlErr = curl_error($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
         curl_close($ch);
 
-        if ($httpCode === 200 && $fileContent) {
-            file_put_contents($savePath, $fileContent);
+        $responseHeaders = substr($response, 0, $headerSize);
+        $body = substr($response, $headerSize);
+
+        if ($httpCode === 200 && $body) {
+            file_put_contents($savePath, $body);
             $results[] = [
                 'DocName' => $doc['DocName'],
                 'status' => 'success',
                 'message' => "Saved to $savePath"
             ];
         } else {
-            log_message('error', "Failed to download file: $url - $curlErr");
             $results[] = [
                 'DocName' => $doc['DocName'],
                 'status' => 'error',
-                'message' => "Failed to download: $url. Error: $curlErr"
+                'message' => "Download failed from: $url\nHTTP Code: $httpCode\nError: $curlErr\nHeaders:\n$responseHeaders"
             ];
         }
-
-        // Optional: Save metadata in DB
     }
 
     header('Content-Type: application/json');
     echo json_encode($results);
 }
-
 
 --->
