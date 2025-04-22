@@ -61,5 +61,6 @@ public function saveDocuments() {
     echo json_encode(['status' => 'success', 'message' => 'Documents saved']);
 }
 
+http://www.vertexmanagementsystem.com/VertexAPI/documents/Bid_Documents/ABA2/5367f75df33688a-553297-1001811pdf.pdf
 
 --->
