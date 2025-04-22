@@ -9,72 +9,57 @@ You can click the Preview link to take a look at your changes.
 
 public function saveDocuments() {
     $input = json_decode(file_get_contents("php://input"), true);
-    $results = [];
 
     foreach ($input as $doc) {
-        $url = $doc['fullDocURL'];
+        // Initialize cURL to download the file
+        $ch = curl_init($doc['fullDocURL']);
+        
+        // Set cURL options to handle the file download
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);   // To capture the response as string
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);   // Follow redirects if any
+        curl_setopt($ch, CURLOPT_HEADER, true);           // Capture headers as well
+        curl_setopt($ch, CURLOPT_NOBODY, false);          // We need the body (file content)
+        
+        // Execute the cURL request
+        $response = curl_exec($ch);
+        
+        if (curl_errno($ch)) {
+            log_message('error', "cURL Error: " . curl_error($ch));
+            curl_close($ch);
+            continue; // Skip to next document if there's an error
+        }
+        
+        // Get the HTTP code to check for success
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        
+        if ($httpCode != 200) {
+            log_message('error', "Download failed from: " . $doc['fullDocURL'] . "\nHTTP Code: $httpCode\nError: " . curl_error($ch));
+            curl_close($ch);
+            continue; // Skip to next document if the download fails
+        }
+
+        // Extract the headers
+        $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+        $fileContent = substr($response, $header_size); // Extract the actual file content
+        
+        // Close the cURL session
+        curl_close($ch);
+
+        // Build the destination path
         $savePath = FCPATH . $doc['DocPathName'];
         $dir = dirname($savePath);
 
-        // Create directory if it doesn't exist
+        // Create directories if they don't exist
         if (!is_dir($dir)) {
-            if (!mkdir($dir, 0777, true)) {
-                $results[] = [
-                    'DocName' => $doc['DocName'],
-                    'status' => 'error',
-                    'message' => "Failed to create directory: $dir"
-                ];
-                continue;
-            }
+            mkdir($dir, 0777, true);
         }
 
-        // Set headers to simulate browser request
-        $headers = [
-            'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-            'Accept: */*',
-            'Referer: ' . $url,
-            'Origin: http://yourdomain.com' // Optional - replace with your actual frontend
-        ];
-
-        // Initialize cURL
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
-            CURLOPT_HEADER => true,
-            CURLOPT_HTTPHEADER => $headers
-        ]);
-
-        $response = curl_exec($ch);
-        $curlErr = curl_error($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-        curl_close($ch);
-
-        $responseHeaders = substr($response, 0, $headerSize);
-        $body = substr($response, $headerSize);
-
-        if ($httpCode === 200 && $body) {
-            file_put_contents($savePath, $body);
-            $results[] = [
-                'DocName' => $doc['DocName'],
-                'status' => 'success',
-                'message' => "Saved to $savePath"
-            ];
-        } else {
-            $results[] = [
-                'DocName' => $doc['DocName'],
-                'status' => 'error',
-                'message' => "Download failed from: $url\nHTTP Code: $httpCode\nError: $curlErr\nHeaders:\n$responseHeaders"
-            ];
-        }
+        // Save the file to the destination path
+        file_put_contents($savePath, $fileContent);
     }
 
-    header('Content-Type: application/json');
-    echo json_encode($results);
+    echo json_encode(['status' => 'success', 'message' => 'Documents saved']);
 }
+
 
 --->
