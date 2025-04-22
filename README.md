@@ -8,39 +8,34 @@ arunkumarvj/arunkumarvj is a ✨ special ✨ repository because its `README.md` 
 You can click the Preview link to take a look at your changes.
 
 private function downloadFile($url, $destination) {
-    $ch = curl_init();
-
-    // Custom headers to mimic a browser
-    $headers = [
-        "User-Agent: Mozilla/5.0",
-        "Accept: application/pdf",
-    ];
-
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true); // Follow redirects
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-
-    $data = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
-    $error = curl_error($ch);
-
-    curl_close($ch);
-
-    // Log the content type for debugging
-    error_log("Status: $httpCode, Type: $contentType");
-
-    // Save if it's a PDF and response is OK
-    if ($data !== false && $httpCode === 200 && strpos($contentType, 'application/pdf') !== false) {
-        file_put_contents($destination, $data);
-        return true;
+    $readStream = @fopen($url, 'rb'); // Open the file for reading (binary mode)
+    if (!$readStream) {
+        error_log("❌ Unable to open source URL: $url");
+        return false;
     }
 
-    error_log("Failed to download: $url. Error: $error");
-    return false;
+    $writeStream = @fopen($destination, 'wb'); // Open the destination file for writing (binary mode)
+    if (!$writeStream) {
+        error_log("❌ Unable to open destination path: $destination");
+        fclose($readStream);
+        return false;
+    }
+
+    // Stream copy
+    $bytesCopied = stream_copy_to_stream($readStream, $writeStream);
+
+    fclose($readStream);
+    fclose($writeStream);
+
+    // Confirm file size
+    if ($bytesCopied > 0) {
+        return true;
+    } else {
+        error_log("❌ File was created but contains 0 bytes.");
+        return false;
+    }
 }
+
 
 
 --->
