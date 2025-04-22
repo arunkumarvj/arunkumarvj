@@ -8,29 +8,38 @@ arunkumarvj/arunkumarvj is a ✨ special ✨ repository because its `README.md` 
 You can click the Preview link to take a look at your changes.
 
 private function downloadFile($url, $destination) {
-    $ch = curl_init($url);
-    $fp = fopen($destination, 'w+b'); // Ensure binary mode
+    $ch = curl_init();
 
-    curl_setopt_array($ch, [
-        CURLOPT_FILE => $fp,
-        CURLOPT_HEADER => 0,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_FAILONERROR => true,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_SSL_VERIFYHOST => false
-    ]);
+    // Custom headers to mimic a browser
+    $headers = [
+        "User-Agent: Mozilla/5.0",
+        "Accept: application/pdf",
+    ];
 
-    $success = curl_exec($ch);
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true); // Follow redirects
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
 
-    if (!$success) {
-        error_log('cURL error: ' . curl_error($ch));
-    }
+    $data = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+    $error = curl_error($ch);
 
     curl_close($ch);
-    fclose($fp);
 
-    return $success;
+    // Log the content type for debugging
+    error_log("Status: $httpCode, Type: $contentType");
+
+    // Save if it's a PDF and response is OK
+    if ($data !== false && $httpCode === 200 && strpos($contentType, 'application/pdf') !== false) {
+        file_put_contents($destination, $data);
+        return true;
+    }
+
+    error_log("Failed to download: $url. Error: $error");
+    return false;
 }
 
 
