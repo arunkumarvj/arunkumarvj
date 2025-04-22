@@ -7,56 +7,62 @@
 arunkumarvj/arunkumarvj is a ✨ special ✨ repository because its `README.md` (this file) appears on your GitHub profile.
 You can click the Preview link to take a look at your changes.
 
-public function saveDocuments()
-{
-    $docs = json_decode(file_get_contents("php://input"), true);
-    $response = [];
+public function saveDocuments() {
+    $input = json_decode(file_get_contents("php://input"), true);
+    $results = [];
 
-    foreach ($docs as $doc) {
-        $docName = $doc['DocName'];
-        $fileUrl = $doc['fullDocURL'];
-        $saveRelativePath = $doc['DocPathName']; // example: documents/Bid_Documents/ABA2/file.pdf
-        $saveFullPath = FCPATH . $saveRelativePath;
+    foreach ($input as $doc) {
+        $url = $doc['fullDocURL'];
+        $savePath = FCPATH . $doc['DocPathName'];
+        $dir = dirname($savePath);
 
-        // Create directory if it doesn't exist
-        $saveDir = dirname($saveFullPath);
-        if (!is_dir($saveDir)) {
-            mkdir($saveDir, 0777, true);
+        // Ensure directory exists
+        if (!is_dir($dir)) {
+            if (!mkdir($dir, 0777, true)) {
+                log_message('error', "Failed to create directory: $dir");
+                $results[] = [
+                    'DocName' => $doc['DocName'],
+                    'status' => 'error',
+                    'message' => "Failed to create directory: $dir"
+                ];
+                continue;
+            }
         }
 
-        // Download file
-        $fileContent = @file_get_contents($fileUrl);
+        // Use cURL for downloading
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        $fileContent = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr = curl_error($ch);
+        curl_close($ch);
 
-        if ($fileContent === false) {
-            $response[] = [
-                'DocName' => $docName,
-                'status' => 'error',
-                'message' => "Failed to download: $fileUrl"
-            ];
-            continue;
-        }
-
-        // Save file to server
-        if (file_put_contents($saveFullPath, $fileContent)) {
-            $response[] = [
-                'DocName' => $docName,
+        if ($httpCode === 200 && $fileContent) {
+            file_put_contents($savePath, $fileContent);
+            $results[] = [
+                'DocName' => $doc['DocName'],
                 'status' => 'success',
-                'message' => "Saved to $saveRelativePath"
+                'message' => "Saved to $savePath"
             ];
         } else {
-            $response[] = [
-                'DocName' => $docName,
+            log_message('error', "Failed to download file: $url - $curlErr");
+            $results[] = [
+                'DocName' => $doc['DocName'],
                 'status' => 'error',
-                'message' => "Failed to save file on server"
+                'message' => "Failed to download: $url. Error: $curlErr"
             ];
         }
+
+        // Optional: Save metadata in DB
     }
 
-    // Final JSON response back to frontend
     header('Content-Type: application/json');
-    echo json_encode($response);
+    echo json_encode($results);
 }
-
 
 
 --->
